@@ -1,0 +1,830 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cavity Flow Lab - Side by Side</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="solver.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Sora:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-1: #f4efe6;
+            --bg-2: #e8dbc7;
+            --paper: #fffaf1;
+            --ink: #1f2a37;
+            --muted: #5f6b7a;
+            --accent: #d97706;
+            --accent-2: #0f766e;
+            --line: #d9ccb6;
+            --ok: #2d7a46;
+            --run: #b45309;
+            --shadow: 0 14px 35px rgba(31, 42, 55, 0.12);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: "IBM Plex Sans", sans-serif;
+            color: var(--ink);
+            background: radial-gradient(circle at 15% 10%, #fff7e6 0%, var(--bg-1) 48%, var(--bg-2) 100%);
+            min-height: 100vh;
+        }
+
+        .page {
+            max-width: 1680px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            padding: 4px 2px 12px;
+            margin-bottom: 16px;
+        }
+
+        .title h1 {
+            margin: 0;
+            font-family: "Sora", sans-serif;
+            font-size: 1.22rem;
+            letter-spacing: 0.2px;
+        }
+
+        .layout-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .layout-toggle select {
+            width: auto;
+            min-width: 170px;
+        }
+
+        button {
+            border: 0;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s ease, filter 0.15s ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            filter: saturate(1.08);
+        }
+
+        .btn-solid {
+            background: linear-gradient(135deg, #cc6a00, var(--accent));
+            color: #fff;
+        }
+
+        .btn-outline {
+            background: #fff;
+            border: 1px solid var(--line);
+            color: var(--ink);
+        }
+
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .sim-grid.single-mode {
+            grid-template-columns: 1fr;
+        }
+
+        .sim-grid.single-mode #cardB {
+            display: none;
+        }
+
+        .sim-card {
+            background: var(--paper);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            display: grid;
+            grid-template-rows: auto 1fr;
+            min-height: 760px;
+        }
+
+        .sim-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--line);
+            background: linear-gradient(180deg, #fffdf8 0%, #fbf2e1 100%);
+        }
+
+        .sim-head h2 {
+            margin: 0;
+            font-family: "Sora", sans-serif;
+            font-size: 1.02rem;
+        }
+
+        .status {
+            font-size: 0.88rem;
+            font-weight: 700;
+            padding: 6px 10px;
+            border-radius: 999px;
+            color: #fff;
+        }
+
+        .status.running { background: var(--run); }
+        .status.converged { background: var(--ok); }
+
+        .sim-body {
+            display: grid;
+            grid-template-columns: 310px 1fr;
+            min-height: 0;
+        }
+
+        .controls {
+            border-right: 1px solid var(--line);
+            padding: 14px;
+            overflow-y: auto;
+            background: #fffefb;
+        }
+
+        .plot-wrap {
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .plot-grid {
+            flex: 1;
+            display: grid;
+            gap: 8px;
+            min-height: 520px;
+        }
+
+        .plot-grid.one { grid-template-columns: 1fr; }
+        .plot-grid.two,
+        .plot-grid.three,
+        .plot-grid.four { grid-template-columns: 1fr 1fr; }
+
+        .plot-grid.three .plot-tile:first-child { grid-column: 1 / span 2; }
+
+        .plot-tile {
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            overflow: hidden;
+            background: #12202c;
+            min-height: 250px;
+        }
+
+        .plot {
+            flex: 1;
+            min-height: 520px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            overflow: hidden;
+            background: #12202c;
+        }
+
+        .group {
+            margin-bottom: 14px;
+        }
+
+        .group h3 {
+            margin: 0 0 8px;
+            font-size: 0.83rem;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--muted);
+        }
+
+        .meta-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 6px;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 0.88rem;
+        }
+
+        .meta-row .val {
+            font-weight: 700;
+            color: var(--accent-2);
+            font-variant-numeric: tabular-nums;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.88rem;
+            color: var(--ink);
+        }
+
+        .inline {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            align-items: baseline;
+        }
+
+        .inline .val {
+            font-weight: 700;
+            color: var(--accent-2);
+            font-variant-numeric: tabular-nums;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+            margin-top: 4px;
+        }
+
+        select {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 9px;
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink);
+            font-weight: 500;
+        }
+
+        .field-list label {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 8px;
+            margin-bottom: 6px;
+            cursor: pointer;
+        }
+
+        .field-list input[type="checkbox"] {
+            accent-color: var(--accent);
+        }
+
+        .row-btns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .iter {
+            margin-top: 8px;
+            font-size: 0.86rem;
+            color: var(--muted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        @media (max-width: 1220px) {
+            .sim-grid { grid-template-columns: 1fr; }
+            .sim-card { min-height: 700px; }
+        }
+
+        @media (max-width: 820px) {
+            .topbar { flex-direction: column; align-items: flex-start; }
+            .sim-body { grid-template-columns: 1fr; }
+            .controls { border-right: 0; border-bottom: 1px solid var(--line); }
+            .plot { min-height: 430px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="topbar">
+            <div class="title">
+                <h1>Solving the Steady-State Navier-Stokes Equations for a Lid-Driven Cavity Using the Stream Function-Vorticity Formulation</h1>
+            </div>
+            <div class="layout-toggle">
+                <label for="simCount">On Screen</label>
+                <select id="simCount">
+                    <option value="2" selected>Two Simulations</option>
+                    <option value="1">One Simulation</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="sim-grid">
+            <section class="sim-card" id="cardA">
+                <div class="sim-head">
+                    <h2>Scenario A</h2>
+                    <div class="status running" id="statusA">Running</div>
+                </div>
+                <div class="sim-body">
+                    <aside class="controls">
+                        <div class="group">
+                            <h3>Live Numbers</h3>
+                            <div class="meta-row"><span>Reynolds Number</span><span class="val" id="reA">100.0</span></div>
+                            <div class="meta-row"><span>Iterations</span><span class="val" id="iterA">0</span></div>
+                        </div>
+
+                        <div class="group">
+                            <h3>Field Layout</h3>
+                            <div class="field-list">
+                                <label><input type="checkbox" id="viewAStreamfunction" checked> Streamfunction</label>
+                                <label><input type="checkbox" id="viewAVorticity"> Vorticity</label>
+                                <label><input type="checkbox" id="viewAVelocity"> Velocity Field</label>
+                                <label><input type="checkbox" id="viewAPressure"> Pressure Field</label>
+                            </div>
+                        </div>
+
+                        <div class="group">
+                            <h3>Physical Parameters</h3>
+                            <label>
+                                <span class="inline"><span>Density, rho</span><span class="val" id="valRhoA">1.00</span></span>
+                                <input type="range" id="rhoA" min="0.1" max="5.0" step="0.1" value="1.0">
+                            </label>
+                            <label>
+                                <span class="inline"><span>Lid Velocity, U</span><span class="val" id="valUA">1.00</span></span>
+                                <input type="range" id="UA" min="0.1" max="5.0" step="0.1" value="1.0">
+                            </label>
+                            <label>
+                                <span class="inline"><span>Cavity Size, L</span><span class="val" id="valLA">1.00</span></span>
+                                <input type="range" id="LA" min="0.1" max="5.0" step="0.1" value="1.0">
+                            </label>
+                            <label>
+                                <span class="inline"><span>Viscosity, mu</span><span class="val" id="valMuA">0.010</span></span>
+                                <input type="range" id="muA" min="0.001" max="0.1" step="0.001" value="0.01">
+                            </label>
+                        </div>
+
+                        <div class="group">
+                            <h3>Numerics</h3>
+                            <label>
+                                <span class="inline"><span>Grid Size, N</span><span class="val" id="valGridA">65</span></span>
+                                <input type="range" id="gridA" min="10" max="128" step="1" value="65">
+                            </label>
+                            <label>
+                                <span class="inline"><span>Aspect Ratio, H/L</span><span class="val" id="valAspectA">1.0</span></span>
+                                <input type="range" id="aspectA" min="0.5" max="2.0" step="0.1" value="1.0">
+                            </label>
+                            <label>
+                                <span class="inline"><span>SOR Factor, omega_s</span><span class="val" id="valSorA">1.70</span></span>
+                                <input type="range" id="sorA" min="1.0" max="1.95" step="0.05" value="1.7">
+                            </label>
+                        </div>
+
+                        <div class="row-btns">
+                            <button class="btn-solid" id="restartA">Restart A</button>
+                            <button class="btn-outline" id="pauseA">Pause A</button>
+                        </div>
+                        <div class="iter" id="stateA">Adjust sliders to compare cases. Restart to apply new physics.</div>
+                    </aside>
+                    <div class="plot-wrap"><div class="plot-grid one" id="plotGridA"></div></div>
+                </div>
+            </section>
+
+            <section class="sim-card" id="cardB">
+                <div class="sim-head">
+                    <h2>Scenario B</h2>
+                    <div class="status running" id="statusB">Running</div>
+                </div>
+                <div class="sim-body">
+                    <aside class="controls">
+                        <div class="group">
+                            <h3>Live Numbers</h3>
+                            <div class="meta-row"><span>Reynolds Number</span><span class="val" id="reB">100.0</span></div>
+                            <div class="meta-row"><span>Iterations</span><span class="val" id="iterB">0</span></div>
+                        </div>
+
+                        <div class="group">
+                            <h3>Field Layout</h3>
+                            <div class="field-list">
+                                <label><input type="checkbox" id="viewBStreamfunction" checked> Streamfunction</label>
+                                <label><input type="checkbox" id="viewBVorticity"> Vorticity</label>
+                                <label><input type="checkbox" id="viewBVelocity"> Velocity Field</label>
+                                <label><input type="checkbox" id="viewBPressure"> Pressure Field</label>
+                            </div>
+                        </div>
+
+                        <div class="group">
+                            <h3>Physical Parameters</h3>
+                            <label>
+                                <span class="inline"><span>Density, rho</span><span class="val" id="valRhoB">1.00</span></span>
+                                <input type="range" id="rhoB" min="0.1" max="5.0" step="0.1" value="1.0">
+                            </label>
+                            <label>
+                                <span class="inline"><span>Lid Velocity, U</span><span class="val" id="valUB">1.00</span></span>
+                                <input type="range" id="UB" min="0.1" max="5.0" step="0.1" value="1.0">
+                            </label>
+                            <label>
+                                <span class="inline"><span>Cavity Size, L</span><span class="val" id="valLB">1.00</span></span>
+                                <input type="range" id="LB" min="0.1" max="5.0" step="0.1" value="1.0">
+                            </label>
+                            <label>
+                                <span class="inline"><span>Viscosity, mu</span><span class="val" id="valMuB">0.010</span></span>
+                                <input type="range" id="muB" min="0.001" max="0.1" step="0.001" value="0.01">
+                            </label>
+                        </div>
+
+                        <div class="group">
+                            <h3>Numerics</h3>
+                            <label>
+                                <span class="inline"><span>Grid Size, N</span><span class="val" id="valGridB">65</span></span>
+                                <input type="range" id="gridB" min="10" max="128" step="1" value="65">
+                            </label>
+                            <label>
+                                <span class="inline"><span>Aspect Ratio, H/L</span><span class="val" id="valAspectB">1.0</span></span>
+                                <input type="range" id="aspectB" min="0.5" max="2.0" step="0.1" value="1.0">
+                            </label>
+                            <label>
+                                <span class="inline"><span>SOR Factor, omega_s</span><span class="val" id="valSorB">1.70</span></span>
+                                <input type="range" id="sorB" min="1.0" max="1.95" step="0.05" value="1.7">
+                            </label>
+                        </div>
+
+                        <div class="row-btns">
+                            <button class="btn-solid" id="restartB">Restart B</button>
+                            <button class="btn-outline" id="pauseB">Pause B</button>
+                        </div>
+                        <div class="iter" id="stateB">Adjust sliders to compare cases. Restart to apply new physics.</div>
+                    </aside>
+                    <div class="plot-wrap"><div class="plot-grid one" id="plotGridB"></div></div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        let ModuleRef = null;
+        const LIVE_PRESSURE_EVERY_STEPS = 6;
+        const LIVE_PRESSURE_ITERATIONS = 35;
+
+        function computeRe(params) {
+            return (params.rho * params.U * params.L) / params.mu;
+        }
+
+        function readSliderValues(s) {
+            return {
+                rho: parseFloat(s.inputs.rho.value),
+                U: parseFloat(s.inputs.U.value),
+                L: parseFloat(s.inputs.L.value),
+                mu: parseFloat(s.inputs.mu.value),
+                grid: parseInt(s.inputs.grid.value, 10),
+                aspect: parseFloat(s.inputs.aspect.value),
+                sor: parseFloat(s.inputs.sor.value)
+            };
+        }
+
+        function updateReadouts(s) {
+            const p = readSliderValues(s);
+            s.params = p;
+            s.outputs.rho.textContent = p.rho.toFixed(2);
+            s.outputs.U.textContent = p.U.toFixed(2);
+            s.outputs.L.textContent = p.L.toFixed(2);
+            s.outputs.mu.textContent = p.mu.toFixed(3);
+            s.outputs.grid.textContent = p.grid;
+            s.outputs.aspect.textContent = p.aspect.toFixed(1);
+            s.outputs.sor.textContent = p.sor.toFixed(2);
+            s.outputs.re.textContent = computeRe(p).toFixed(1);
+        }
+
+        function setStatus(s, running) {
+            s.isRunning = running;
+            s.statusEl.className = running ? "status running" : "status converged";
+            s.statusEl.textContent = running ? "Running" : "Converged";
+            s.pauseBtn.textContent = running ? "Pause " + s.key : "Resume " + s.key;
+        }
+
+        function getCoords(params, Nx, Ny) {
+            const X = [];
+            const Y = [];
+            const dx = params.L / (Nx - 1);
+            const dy = (params.L * params.aspect) / (Ny - 1);
+            for (let j = 0; j < Ny; j++) {
+                const rowX = [];
+                const rowY = [];
+                for (let i = 0; i < Nx; i++) {
+                    rowX.push(i * dx);
+                    rowY.push(j * dy);
+                }
+                X.push(rowX);
+                Y.push(rowY);
+            }
+            return { X, Y };
+        }
+
+        function generateQuiverLines(X, Y, uGrid, vGrid, L) {
+            const linesX = [];
+            const linesY = [];
+            const step = Math.max(1, Math.floor(X[0].length / 24));
+            let maxVel = 0;
+
+            for (let j = 0; j < Y.length; j += step) {
+                for (let i = 0; i < X[0].length; i += step) {
+                    const speed = Math.sqrt(uGrid[j][i] * uGrid[j][i] + vGrid[j][i] * vGrid[j][i]);
+                    if (speed > maxVel) maxVel = speed;
+                }
+            }
+
+            if (maxVel < 1e-8) return null;
+            const arrowScale = (X[0][1] - X[0][0]) * step * 1.35 / maxVel;
+
+            for (let j = 0; j < Y.length; j += step) {
+                for (let i = 0; i < X[0].length; i += step) {
+                    const u = uGrid[j][i];
+                    const v = vGrid[j][i];
+                    const speed = Math.sqrt(u * u + v * v);
+                    if (speed < 1e-4) continue;
+
+                    const x0 = X[j][i];
+                    const y0 = Y[j][i];
+                    const x1 = x0 + u * arrowScale;
+                    const y1 = y0 + v * arrowScale;
+                    const angle = Math.atan2(y1 - y0, x1 - x0);
+                    const head = L * 0.018;
+
+                    linesX.push(x0, x1, null, x1, x1 - head * Math.cos(angle - Math.PI / 6), null, x1, x1 - head * Math.cos(angle + Math.PI / 6), null);
+                    linesY.push(y0, y1, null, y1, y1 - head * Math.sin(angle - Math.PI / 6), null, y1, y1 - head * Math.sin(angle + Math.PI / 6), null);
+                }
+            }
+
+            return {
+                x: linesX,
+                y: linesY,
+                mode: "lines",
+                line: { color: "rgba(244, 244, 245, 0.8)", width: 1 },
+                hoverinfo: "none",
+                showlegend: false
+            };
+        }
+
+        function getSelectedViews(s) {
+            return Object.keys(s.viewChecks).filter((name) => s.viewChecks[name].checked);
+        }
+
+        function ensureAtLeastOneView(s, preferredName) {
+            const selected = getSelectedViews(s);
+            if (selected.length > 0) return;
+            if (preferredName && s.viewChecks[preferredName]) s.viewChecks[preferredName].checked = true;
+            else s.viewChecks.Streamfunction.checked = true;
+        }
+
+        function updatePlotGridLayout(s, count) {
+            s.plotGridEl.className = "plot-grid " + (count <= 1 ? "one" : count === 2 ? "two" : count === 3 ? "three" : "four");
+        }
+
+        function ensurePlotTiles(s, views) {
+            while (s.plotGridEl.firstChild) {
+                const node = s.plotGridEl.firstChild;
+                if (node.id) Plotly.purge(node.id);
+                s.plotGridEl.removeChild(node);
+            }
+
+            views.forEach((viewName) => {
+                const tile = document.createElement("div");
+                tile.className = "plot-tile";
+                tile.id = "plot" + s.key + viewName;
+                s.plotGridEl.appendChild(tile);
+            });
+
+            updatePlotGridLayout(s, views.length);
+        }
+
+        function valueForView(view, psiVal, omegaVal, pVal, uDim, vDim, params) {
+            if (view === "Streamfunction") return psiVal * (params.U * params.L);
+            if (view === "Vorticity") return omegaVal * (params.U / params.L);
+            if (view === "Pressure") return pVal * (params.rho * params.U * params.U);
+            return Math.sqrt(uDim * uDim + vDim * vDim);
+        }
+
+        function drawPlot(s) {
+            if (!s.solver) return;
+            const Nx = s.solver.getNx();
+            const Ny = s.solver.getNy();
+            const coords = getCoords(s.params, Nx, Ny);
+
+            const psiRaw = s.solver.getPsi();
+            const omegaRaw = s.solver.getOmega();
+            const uRaw = s.solver.getU();
+            const vRaw = s.solver.getV();
+            const pRaw = s.solver.getP();
+
+            ensureAtLeastOneView(s);
+            const selectedViews = getSelectedViews(s);
+            ensurePlotTiles(s, selectedViews);
+
+            const fieldData = {};
+            selectedViews.forEach((view) => {
+                fieldData[view] = [];
+            });
+            const U2D = [];
+            const V2D = [];
+
+            for (let j = 0; j < Ny; j++) {
+                const rowU = [];
+                const rowV = [];
+                selectedViews.forEach((view) => {
+                    fieldData[view].push([]);
+                });
+
+                for (let i = 0; i < Nx; i++) {
+                    const id = i + j * Nx;
+                    const uDim = uRaw[id] * s.params.U;
+                    const vDim = vRaw[id] * s.params.U;
+
+                    selectedViews.forEach((view) => {
+                        fieldData[view][j].push(valueForView(view, psiRaw[id], omegaRaw[id], pRaw[id], uDim, vDim, s.params));
+                    });
+
+                    rowU.push(uDim);
+                    rowV.push(vDim);
+                }
+                U2D.push(rowU);
+                V2D.push(rowV);
+            }
+
+            selectedViews.forEach((view) => {
+                const traces = [{
+                    x: coords.X[0],
+                    y: coords.Y.map(r => r[0]),
+                    z: fieldData[view],
+                    type: "contour",
+                    colorscale: view === "Velocity" ? "YlOrRd" : "RdBu",
+                    reversescale: view !== "Velocity",
+                    contours: { coloring: "heatmap" },
+                    colorbar: { title: view, titleside: "right" }
+                }];
+
+                if (view === "Velocity") {
+                    const quiver = generateQuiverLines(coords.X, coords.Y, U2D, V2D, s.params.L);
+                    if (quiver) traces.push(quiver);
+                }
+
+                Plotly.react("plot" + s.key + view, traces, {
+                    title: { text: view + " - Scenario " + s.key, font: { color: "#f8fafc", size: 13 } },
+                    paper_bgcolor: "#0f1a24",
+                    plot_bgcolor: "#0f1a24",
+                    font: { color: "#e5e7eb" },
+                    margin: { l: 40, r: 20, b: 36, t: 42 },
+                    xaxis: { title: "X (m)", scaleanchor: "y", scaleratio: 1, gridcolor: "#2f3f4b", zerolinecolor: "#2f3f4b" },
+                    yaxis: { title: "Y (m)", gridcolor: "#2f3f4b", zerolinecolor: "#2f3f4b" },
+                    showlegend: false
+                }, { responsive: true });
+            });
+        }
+
+        function initSolver(s) {
+            if (!ModuleRef) return;
+            updateReadouts(s);
+            const Re = computeRe(s.params);
+            if (s.solver) s.solver.delete();
+            s.solver = new ModuleRef.CavitySolver(s.params.grid, s.params.aspect, Re, s.params.sor);
+            s.iterations = 0;
+            s.livePressureTick = 0;
+            s.converged = false;
+            s.iterEl.textContent = "0";
+            s.noteEl.textContent = "Simulation restarted.";
+            setStatus(s, true);
+            drawPlot(s);
+            runLoop();
+        }
+
+        function stepSolver(s, iterPerFrame) {
+            if (!s.solver || !s.isRunning) return false;
+            const maxError = s.solver.step(iterPerFrame);
+            s.iterations += iterPerFrame;
+            s.livePressureTick += 1;
+            s.iterEl.textContent = String(s.iterations);
+
+            if (!s.converged && s.livePressureTick % LIVE_PRESSURE_EVERY_STEPS === 0) {
+                s.solver.solvePressureIterations(LIVE_PRESSURE_ITERATIONS);
+            }
+
+            if (maxError < 1e-6 && s.iterations > 120 && !s.converged) {
+                s.solver.solvePressure();
+                s.converged = true;
+                setStatus(s, false);
+                s.noteEl.textContent = "Converged. Pressure field finalized.";
+            }
+
+            drawPlot(s);
+            return s.isRunning;
+        }
+
+        const states = ["A", "B"].map((key) => {
+            const s = {
+                key,
+                solver: null,
+                params: null,
+                iterations: 0,
+                livePressureTick: 0,
+                converged: false,
+                isRunning: true,
+                plotGridEl: document.getElementById("plotGrid" + key),
+                statusEl: document.getElementById("status" + key),
+                iterEl: document.getElementById("iter" + key),
+                noteEl: document.getElementById("state" + key),
+                pauseBtn: document.getElementById("pause" + key),
+                restartBtn: document.getElementById("restart" + key),
+                viewChecks: {
+                    Streamfunction: document.getElementById("view" + key + "Streamfunction"),
+                    Vorticity: document.getElementById("view" + key + "Vorticity"),
+                    Velocity: document.getElementById("view" + key + "Velocity"),
+                    Pressure: document.getElementById("view" + key + "Pressure")
+                },
+                inputs: {
+                    rho: document.getElementById("rho" + key),
+                    U: document.getElementById("U" + key),
+                    L: document.getElementById("L" + key),
+                    mu: document.getElementById("mu" + key),
+                    grid: document.getElementById("grid" + key),
+                    aspect: document.getElementById("aspect" + key),
+                    sor: document.getElementById("sor" + key)
+                },
+                outputs: {
+                    rho: document.getElementById("valRho" + key),
+                    U: document.getElementById("valU" + key),
+                    L: document.getElementById("valL" + key),
+                    mu: document.getElementById("valMu" + key),
+                    grid: document.getElementById("valGrid" + key),
+                    aspect: document.getElementById("valAspect" + key),
+                    sor: document.getElementById("valSor" + key),
+                    re: document.getElementById("re" + key)
+                }
+            };
+
+            Object.values(s.inputs).forEach((input) => {
+                input.addEventListener("input", () => {
+                    updateReadouts(s);
+                    s.noteEl.textContent = "Values updated live. Click Restart " + s.key + " to apply physics changes.";
+                });
+            });
+
+            Object.entries(s.viewChecks).forEach(([name, checkbox]) => {
+                checkbox.addEventListener("change", () => {
+                    ensureAtLeastOneView(s, name);
+                    drawPlot(s);
+                });
+            });
+            s.restartBtn.addEventListener("click", () => initSolver(s));
+
+            s.pauseBtn.addEventListener("click", () => {
+                if (!s.solver) return;
+                if (s.converged) {
+                    s.noteEl.textContent = "Scenario is converged. Use Restart " + s.key + " to run again.";
+                    return;
+                }
+                setStatus(s, !s.isRunning);
+                if (s.isRunning) runLoop();
+            });
+
+            updateReadouts(s);
+            return s;
+        });
+
+        let animationHandle = null;
+        function runLoop() {
+            if (animationHandle !== null) return;
+
+            const tick = () => {
+                animationHandle = null;
+                let anyRunning = false;
+                states.forEach((s) => {
+                    const stillRunning = stepSolver(s, 40);
+                    anyRunning = anyRunning || stillRunning;
+                });
+
+                if (anyRunning) {
+                    animationHandle = requestAnimationFrame(tick);
+                }
+            };
+
+            animationHandle = requestAnimationFrame(tick);
+        }
+
+        const simGridEl = document.querySelector(".sim-grid");
+        const simCountEl = document.getElementById("simCount");
+
+        function applySimulationCount() {
+            const singleMode = simCountEl.value === "1";
+            simGridEl.classList.toggle("single-mode", singleMode);
+            drawPlot(states[0]);
+            if (!singleMode) drawPlot(states[1]);
+            setTimeout(() => window.dispatchEvent(new Event("resize")), 0);
+        }
+
+        simCountEl.addEventListener("change", applySimulationCount);
+
+        createCavityModule().then((Module) => {
+            ModuleRef = Module;
+            initSolver(states[0]);
+            initSolver(states[1]);
+            states[1].inputs.U.value = "2.0";
+            updateReadouts(states[1]);
+            initSolver(states[1]);
+            applySimulationCount();
+        });
+    </script>
+</body>
+</html>
